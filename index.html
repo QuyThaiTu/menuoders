@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Web Đặt Hàng Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    h2 { margin-top: 0; }
+    .container { display: flex; gap: 20px; }
+    .menu, .bill { background: #fff; padding: 15px; border-radius: 8px; width: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .item { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    button { padding: 5px 10px; cursor: pointer; }
+    .bill table { width: 100%; border-collapse: collapse; }
+    .bill th, .bill td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
+    .total { font-weight: bold; margin-top: 10px; }
+    #qrcode { margin-top: 15px; }
+    textarea, input { width: 100%; margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<h2>HỆ THỐNG ĐẶT HÀNG (DEMO)</h2>
+
+<div class="container">
+  <div class="menu">
+    <h3>Menu</h3>
+    <div id="menu"></div>
+  </div>
+
+  <div class="bill">
+    <h3>Bill Thanh Toán</h3>
+    <table>
+      <thead>
+        <tr><th>Món</th><th>SL</th><th>Giá</th><th></th></tr>
+      </thead>
+      <tbody id="bill-body"></tbody>
+    </table>
+    <div class="total">Tổng tiền: <span id="total">0</span> đ</div>
+<div class="total">Trạng thái: <span id="status">CHƯA THANH TOÁN</span></div>
+<button onclick="markPaid()">Xác nhận đã thanh toán</button>
+
+    <label>Tin nhắn:</label>
+    <textarea id="note" placeholder="Ví dụ: Giao trước 12h"></textarea>
+
+    <label>Địa chỉ giao:</label>
+    <input id="address" placeholder="Số nhà, đường, quận" />
+
+    <button onclick="generateQR()">Tạo QR Bill</button>
+    <div id="qrcode"></div>
+
+<hr />
+<h4>Test quét QR (demo)</h4>
+<input id="scanInput" placeholder="Dán bill_id khi quét QR" />
+<button onclick="scanBill()">Quét</button>
+<div id="scanResult"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+const menuData = [
+  { id: 1, name: 'Xôi gà', price: 25000 },
+  { id: 2, name: 'Xôi xá xíu', price: 30000 },
+  { id: 3, name: 'Trà tắc', price: 15000 },
+  { id: 4, name: 'Cà phê sữa', price: 20000 }
+];
+
+let cart = {};
+let staticBillId = null;
+let billLocked = false;
+let paymentStatus = 'UNPAID';
+
+function renderMenu() {
+  const menu = document.getElementById('menu');
+  menu.innerHTML = '';
+  menuData.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `${item.name} - ${item.price} đ <button onclick="addItem(${item.id})">+</button>`;
+    menu.appendChild(div);
+  });
+}
+
+function addItem(id) {
+  if (billLocked) {
+    alert('Bill đã khoá, không thể thêm món');
+    return;
+  }
+  cart[id] = cart[id] ? cart[id] + 1 : 1;
+  renderBill();
+}
+
+function removeItem(id) {
+  if (billLocked) {
+    alert('Bill đã khoá, không thể xoá món');
+    return;
+  }
+  delete cart[id];
+  renderBill();
+}
+
+function renderBill() {
+  const tbody = document.getElementById('bill-body');
+  tbody.innerHTML = '';
+  let total = 0;
+
+  Object.keys(cart).forEach(id => {
+    const item = menuData.find(i => i.id == id);
+    if (!item) return;
+    const qty = cart[id];
+    const price = item.price * qty;
+    total += price;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${item.name}</td><td>${qty}</td><td>${price}</td><td><button onclick="removeItem(${id})">X</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('total').innerText = total;
+}
+
+function generateQR() {
+  if (!staticBillId) {
+    staticBillId = 'BILL-' + Date.now();
+  }
+
+  // Tạo link dẫn sang trang bill.html
+  const basePath = window.location.href.replace(/[^/]*$/, '');
+  const billUrl = basePath + 'bill.html?bill_id=' + staticBillId;
+
+  document.getElementById('qrcode').innerHTML = '';
+  billLocked = true;
+
+  new QRCode(document.getElementById('qrcode'), {
+    text: billUrl,
+    width: 180,
+    height: 180
+  });
+}
+function markPaid() {
+  paymentStatus = 'PAID';
+  document.getElementById('status').innerText = 'ĐÃ THANH TOÁN';
+}
+
+function resetBill() {
+  cart = {};
+  staticBillId = null;
+  billLocked = false;
+  paymentStatus = 'UNPAID';
+  document.getElementById('bill-body').innerHTML = '';
+  document.getElementById('total').innerText = 0;
+  document.getElementById('status').innerText = 'CHƯA THANH TOÁN';
+  document.getElementById('qrcode').innerHTML = '';
+}
+
+function scanBill() {
+  const scanned = document.getElementById('scanInput').value;
+  if (scanned === staticBillId) {
+    document.getElementById('scanResult').innerText = '✔ Bill hợp lệ: ' + scanned;
+  } else {
+    document.getElementById('scanResult').innerText = '✖ Bill không tồn tại';
+  }
+}
+
+// RENDER MENU NGAY KHI LOAD TRANG
+renderMenu();
+</script>
+<!-- ================= BACKEND INTEGRATION GUIDE =================
+LƯU Ý: Frontend (menu, giỏ hàng) GIỮ NGUYÊN.
+Backend chỉ dùng để LƯU / ĐỌC BILL, không can thiệp render menu.
+==============================================================
+
+
+Phần dưới đây là HƯỚNG DẪN + CODE MẪU để tách backend lưu bill thật bằng Firebase + Node.js
+Frontend hiện tại có thể giữ nguyên, chỉ cần gọi API.
+============================================================== -->
+
+</body>
+</html>
