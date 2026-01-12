@@ -1,103 +1,78 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>Bill Thanh Toán</title>
-  <style>
-    body { font-family: Arial, sans-serif; background:#f5f5f5; padding:20px; }
-    .bill { max-width:420px; margin:auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.1); }
-    h2,h3 { margin-top:0 }
-    table { width:100%; border-collapse:collapse; margin-top:10px }
-    td,th { border-bottom:1px solid #ddd; padding:6px; text-align:left }
-    .total { font-weight:bold; margin-top:10px; }
-    .bank { margin-top:15px; padding:10px; background:#f0f8ff; border-radius:6px }
-    .bank a { display:block; margin-top:5px; word-break:break-all }
-    .muted { color:#666; font-size:13px }
-  </style>
+<meta charset="UTF-8">
+<title>Bill thanh toán</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body { font-family: Arial; background:#f5f5f5; padding:20px }
+.bill { max-width:420px; margin:auto; background:#fff; padding:20px; border-radius:8px }
+table { width:100%; border-collapse:collapse; margin-top:10px }
+td,th { border-bottom:1px solid #ddd; padding:6px }
+.total { font-weight:bold; margin-top:10px }
+</style>
 </head>
 <body>
 
 <div class="bill">
-  <h2>HÓA ĐƠN THANH TOÁN</h2>
-  <div>Mã đơn: <b id="billId"></b></div>
-  <div>Ngày giờ: <span id="time"></span></div>
+<h2>HÓA ĐƠN</h2>
+<div>Mã đơn: <b id="billId"></b></div>
+<div>Thời gian: <span id="time"></span></div>
 
-  <table>
-    <thead><tr><th>Món</th><th>SL</th><th>Giá</th></tr></thead>
-    <tbody id="items"></tbody>
-  </table>
+<table>
+<thead><tr><th>Món</th><th>SL</th><th>Giá</th></tr></thead>
+<tbody id="items"></tbody>
+</table>
 
-  <div class="total">Tổng tiền: <span id="total"></span> đ</div>
+<div class="total">Tổng tiền: <span id="total"></span> đ</div>
 
-  <div class="bank">
-    <h3>Thông tin thanh toán</h3>
-    <div>Ngân hàng: <b>Vietcombank</b></div>
-    <div>Chủ tài khoản: <b>DANG VU DINH QUY</b></div>
-    <div>Số tài khoản: <b id="account">9766425977</b></div>
-
-    <div class="muted">Nội dung chuyển khoản:</div>
-    <div><b id="content"></b></div>
-
-    <img id="vietqr" style="width:220px;margin:10px auto;display:block" />
-
-    <a id="payLink" target="_blank">➡ Mở app ngân hàng để thanh toán</a>
-  </div>
+<h3>VietQR</h3>
+<img id="vietqr" width="250">
 </div>
 
 <script>
-  // ===== HÀM TẠO VIETQR CHUẨN NAPAS =====
-function generateVietQR(billId, amount) {
-  const bankId = 'VCB';              // Mã ngân hàng (VCB, ACB, BIDV, TCB...)
-  const accountNo = '0123456789';    // Số tài khoản
-  const accountName = 'NGUYEN VAN A';
-  const addInfo = `${billId} ${amount}`;
+/* ================= SUPABASE ================= */
+const supabase = supabase.createClient(
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY'
+);
 
-  return `https://api.vietqr.io/image/${bankId}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
-}
-
-// Lấy bill_id từ URL
-const params = new URLSearchParams(window.location.search);
+/* ================= PARAM ================= */
+const params = new URLSearchParams(location.search);
 const billId = params.get('bill_id');
 
-document.getElementById('billId').innerText = billId || 'Không có mã đơn';
+document.getElementById('billId').innerText = billId;
 document.getElementById('time').innerText = new Date().toLocaleString();
 
-// LẤY BILL TỪ localStorage THEO bill_id
-const stored = localStorage.getItem('bill_' + billId);
-let billData;
+/* ================= VIETQR ================= */
+function generateVietQR(billId, amount) {
+  const bank = 'VCB';
+  const acc = '0123456789';
+  const name = 'NGUYEN VAN A';
+  const info = `${billId} ${amount}`;
 
-if (stored) {
-  billData = JSON.parse(stored);
-} else {
-  billData = {
-    items: [],
-    total: 0
-  };
+  return `https://api.vietqr.io/image/${bank}-${acc}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(info)}&accountName=${encodeURIComponent(name)}`;
 }
 
-const tbody = document.getElementById('items');
-tbody.innerHTML = '';
+/* ================= LOAD BILL ================= */
+(async () => {
+  const { data } = await supabase
+    .from('bills')
+    .select('*')
+    .eq('bill_id', billId)
+    .single();
 
-billData.items.forEach(i => {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td>`;
-  tbody.appendChild(tr);
-});
+  const tbody = document.getElementById('items');
+  data.items.forEach(i => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td>`;
+    tbody.appendChild(tr);
+  });
 
-document.getElementById('total').innerText = billData.total;
-
-// Nội dung chuyển khoản: MÃ ĐƠN + SỐ TIỀN
-// Nội dung chuyển khoản: MÃ ĐƠN + SỐ TIỀN
-const content = `${billId} ${billData.total}`;
-document.getElementById('content').innerText = content;
-
-// Hiển thị VietQR
-const vietqrUrl = generateVietQR(billId, billData.total);
-document.getElementById('vietqr').src = vietqrUrl;
-
-// Link mở app ngân hàng (fallback)
-const payUrl = `https://vcbdigibank.vietcombank.com.vn/pay?account=0123456789&amount=${billData.total}&content=${encodeURIComponent(content)}`;
-document.getElementById('payLink').href = payUrl;
+  document.getElementById('total').innerText = data.total;
+  document.getElementById('vietqr').src =
+    generateVietQR(billId, data.total);
+})();
 </script>
 
 </body>
