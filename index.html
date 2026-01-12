@@ -1,211 +1,116 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>Web Đặt Hàng Demo</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-    h2 { margin-top: 0; }
-    .container { display: flex; gap: 20px; }
-    .menu, .bill { background: #fff; padding: 15px; border-radius: 8px; width: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    .item { display: flex; justify-content: space-between; margin-bottom: 10px; }
-    button { padding: 5px 10px; cursor: pointer; }
-    .bill table { width: 100%; border-collapse: collapse; }
-    .bill th, .bill td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
-    .total { font-weight: bold; margin-top: 10px; }
-    #qrcode { margin-top: 15px; }
-    textarea, input { width: 100%; margin-top: 5px; }
-  </style>
+<meta charset="UTF-8">
+<title>Menu đặt món</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body { font-family: Arial; background:#f5f5f5; padding:20px }
+.container { max-width:500px; margin:auto; background:#fff; padding:20px; border-radius:8px }
+button { padding:6px 10px; margin:2px }
+.lock { opacity:.6; pointer-events:none }
+</style>
 </head>
 <body>
 
-<h2>HỆ THỐNG ĐẶT HÀNG (DEMO)</h2>
-
 <div class="container">
-  <div class="menu">
-    <h3>Menu</h3>
-    <div id="menu"></div>
-  </div>
+<h2>MENU</h2>
+<div id="menu"></div>
 
-  <div class="bill">
-    <h3>Bill Thanh Toán</h3>
-    <table>
-      <thead>
-        <tr><th>Món</th><th>SL</th><th>Giá</th><th></th></tr>
-      </thead>
-      <tbody id="bill-body"></tbody>
-    </table>
-    <div class="total">Tổng tiền: <span id="total">0</span> đ</div>
-<div class="total">Trạng thái: <span id="status">CHƯA THANH TOÁN</span></div>
-<button onclick="markPaid()">Xác nhận đã thanh toán</button>
-
-    <label>Tin nhắn:</label>
-    <textarea id="note" placeholder="Ví dụ: Giao trước 12h"></textarea>
-
-    <label>Địa chỉ giao:</label>
-    <input id="address" placeholder="Số nhà, đường, quận" />
-
-    <button onclick="generateQR()">Tạo QR Bill</button>
-    <div id="qrcode"></div>
-
-<hr />
-<h4>Test quét QR (demo)</h4>
-<input id="scanInput" placeholder="Dán bill_id khi quét QR" />
-<button onclick="scanBill()">Quét</button>
-<div id="scanResult"></div>
-  </div>
+<hr>
+<button onclick="generateQR()">TẠO QR THANH TOÁN</button>
+<div id="qrcode" style="margin-top:15px"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
+/* ================= SUPABASE ================= */
+const supabase = supabase.createClient(
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY'
+);
+
+/* ================= DATA ================= */
 const menuData = [
   { id: 1, name: 'Xôi gà', price: 25000 },
   { id: 2, name: 'Xôi xá xíu', price: 30000 },
-  { id: 3, name: 'Trà tắc', price: 15000 },
-  { id: 4, name: 'Cà phê sữa', price: 20000 }
+  { id: 3, name: 'Trà tắc', price: 15000 }
 ];
 
 let cart = {};
-let staticBillId = null;
 let billLocked = false;
-let paymentStatus = 'UNPAID';
+let billId = null;
 
-function renderMenu() {
-  const menu = document.getElementById('menu');
-  menu.innerHTML = '';
-  menuData.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'item';
-    div.innerHTML = `${item.name} - ${item.price} đ <button onclick="addItem(${item.id})">+</button>`;
-    menu.appendChild(div);
-  });
+/* ================= RENDER MENU ================= */
+const menuDiv = document.getElementById('menu');
+
+menuData.forEach(item => {
+  const div = document.createElement('div');
+  div.innerHTML = `
+    ${item.name} - ${item.price}đ
+    <button onclick="add(${item.id})">+</button>
+    <button onclick="remove(${item.id})">-</button>
+    <span id="qty-${item.id}">0</span>
+  `;
+  menuDiv.appendChild(div);
+});
+
+function add(id) {
+  if (billLocked) return;
+  cart[id] = (cart[id] || 0) + 1;
+  document.getElementById(`qty-${id}`).innerText = cart[id];
 }
-function saveBillToLocalStorage() {
+
+function remove(id) {
+  if (billLocked || !cart[id]) return;
+  cart[id]--;
+  document.getElementById(`qty-${id}`).innerText = cart[id];
+}
+
+/* ================= SAVE BILL ================= */
+async function saveBill() {
   const items = [];
   let total = 0;
 
   Object.keys(cart).forEach(id => {
-    const item = menuData.find(m => m.id == id);
-    if (!item) return;
-
+    const m = menuData.find(x => x.id == id);
     const qty = cart[id];
-    const price = item.price * qty;
+    if (!m || qty <= 0) return;
+
+    const price = m.price * qty;
     total += price;
 
-    items.push({
-      name: item.name,
-      qty: qty,
-      price: price
-    });
+    items.push({ name: m.name, qty, price });
   });
 
-  const billData = {
+  await supabase.from('bills').insert({
+    bill_id: billId,
     items: items,
     total: total,
-    createdAt: new Date().toISOString()
-  };
-
-  localStorage.setItem(
-    'bill_' + staticBillId,
-    JSON.stringify(billData)
-  );
-}
-
-
-  
-function addItem(id) {
-  if (billLocked) {
-    alert('Bill đã khoá, không thể thêm món');
-    return;
-  }
-  cart[id] = cart[id] ? cart[id] + 1 : 1;
-  renderBill();
-}
-
-function removeItem(id) {
-  if (billLocked) {
-    alert('Bill đã khoá, không thể xoá món');
-    return;
-  }
-  delete cart[id];
-  renderBill();
-}
-
-function renderBill() {
-  const tbody = document.getElementById('bill-body');
-  tbody.innerHTML = '';
-  let total = 0;
-
-  Object.keys(cart).forEach(id => {
-    const item = menuData.find(i => i.id == id);
-    if (!item) return;
-    const qty = cart[id];
-    const price = item.price * qty;
-    total += price;
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${item.name}</td><td>${qty}</td><td>${price}</td><td><button onclick="removeItem(${id})">X</button></td>`;
-    tbody.appendChild(tr);
+    status: 'UNPAID'
   });
-
-  document.getElementById('total').innerText = total;
 }
 
-function generateQR() {
-  if (!staticBillId) {
-    staticBillId = 'BILL-' + Date.now();
-  }
-saveBillToLocalStorage();
-  // Tạo link dẫn sang trang bill.html
-  const basePath = window.location.href.replace(/[^/]*$/, '');
-  const billUrl = basePath + 'bill.html?bill_id=' + staticBillId;
-
-  document.getElementById('qrcode').innerHTML = '';
+/* ================= QR ================= */
+async function generateQR() {
+  if (billLocked) return;
   billLocked = true;
 
+  billId = 'BILL-' + Date.now();
+  await saveBill();
+
+  const base = location.href.replace(/[^/]*$/, '');
+  const url = base + 'bill.html?bill_id=' + billId;
+
+  document.getElementById('qrcode').innerHTML = '';
   new QRCode(document.getElementById('qrcode'), {
-    text: billUrl,
+    text: url,
     width: 180,
     height: 180
   });
-}
-function markPaid() {
-  paymentStatus = 'PAID';
-  document.getElementById('status').innerText = 'ĐÃ THANH TOÁN';
-}
 
-function resetBill() {
-  cart = {};
-  staticBillId = null;
-  billLocked = false;
-  paymentStatus = 'UNPAID';
-  document.getElementById('bill-body').innerHTML = '';
-  document.getElementById('total').innerText = 0;
-  document.getElementById('status').innerText = 'CHƯA THANH TOÁN';
-  document.getElementById('qrcode').innerHTML = '';
+  document.querySelector('.container').classList.add('lock');
 }
-
-function scanBill() {
-  const scanned = document.getElementById('scanInput').value;
-  if (scanned === staticBillId) {
-    document.getElementById('scanResult').innerText = '✔ Bill hợp lệ: ' + scanned;
-  } else {
-    document.getElementById('scanResult').innerText = '✖ Bill không tồn tại';
-  }
-}
-
-// RENDER MENU NGAY KHI LOAD TRANG
-renderMenu();
 </script>
-<!-- ================= BACKEND INTEGRATION GUIDE =================
-LƯU Ý: Frontend (menu, giỏ hàng) GIỮ NGUYÊN.
-Backend chỉ dùng để LƯU / ĐỌC BILL, không can thiệp render menu.
-==============================================================
-
-
-Phần dưới đây là HƯỚNG DẪN + CODE MẪU để tách backend lưu bill thật bằng Firebase + Node.js
-Frontend hiện tại có thể giữ nguyên, chỉ cần gọi API.
-============================================================== -->
-
 </body>
 </html>
