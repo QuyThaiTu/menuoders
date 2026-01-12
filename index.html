@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Menu đặt món</title>
 
+<!-- LIB -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -15,8 +16,10 @@ body {
   padding:20px;
 }
 
+h2 { margin-top:0 }
+
 .wrapper {
-  max-width:900px;
+  max-width:1000px;
   margin:auto;
   display:grid;
   grid-template-columns: 2fr 1fr;
@@ -38,12 +41,12 @@ body {
   padding:10px 0;
 }
 
-.menu-item:last-child { border-bottom:none; }
+.menu-item:last-child { border-bottom:none }
 
 .controls button {
   width:28px;
   height:28px;
-  margin:0 3px;
+  margin:0 2px;
 }
 
 .cart-line {
@@ -61,26 +64,41 @@ body {
   opacity:.6;
   pointer-events:none;
 }
+
+input {
+  width:100%;
+  padding:6px;
+  margin-bottom:6px;
+}
 </style>
 </head>
 
 <body>
 
-<h2>🍽️ MENU ĐẶT MÓN</h2>
+<h2>🍽️ HỆ THỐNG ĐẶT MÓN</h2>
 
 <div class="wrapper" id="app">
 
-  <!-- MENU -->
-  <div class="panel">
-    <h3>Danh sách món</h3>
-    <div id="menu"></div>
+  <!-- LEFT -->
+  <div>
+    <div class="panel">
+      <h3>➕ Thêm món mới</h3>
+      <input id="newName" placeholder="Tên món">
+      <input id="newPrice" type="number" placeholder="Giá (vd: 25000)">
+      <button onclick="addNewItem()">Thêm món</button>
+    </div>
+
+    <div class="panel" style="margin-top:15px">
+      <h3>📋 Menu</h3>
+      <div id="menu"></div>
+    </div>
   </div>
 
-  <!-- GIỎ + QR -->
+  <!-- RIGHT -->
   <div class="panel">
-    <h3>Giỏ hàng</h3>
+    <h3>🛒 Giỏ hàng</h3>
     <div id="cart"></div>
-    <div class="total">Tổng: <span id="total">0</span> đ</div>
+    <div class="total">Tổng tiền: <span id="total">0</span> đ</div>
 
     <hr>
     <button onclick="generateQR()">Tạo QR thanh toán</button>
@@ -91,13 +109,13 @@ body {
 
 <script>
 /* ================= SUPABASE ================= */
-const supabase = supabase.createClient(
-  'https://xopuxyouxjkiumigcntl.supabase.co',
-  'sb_publishable_amT6e0zWSDYtglUIKGZhOw_I7Mqpa4O'
+const supabaseClient = supabase.createClient(
+  'https://xopuxyouxjkiumigcntl.supabase.co',          // <-- THAY
+  'sb_publishable_amT6e0zWSDYtglUIKGZhOw_I7Mqpa4O'      // <-- THAY
 );
 
 /* ================= DATA ================= */
-const menuData = [
+let menuData = [
   { id: 1, name: 'Xôi gà', price: 25000 },
   { id: 2, name: 'Xôi xá xíu', price: 30000 },
   { id: 3, name: 'Trà tắc', price: 15000 }
@@ -107,24 +125,55 @@ let cart = {};
 let billLocked = false;
 let billId = null;
 
-/* ================= RENDER MENU ================= */
-const menuDiv = document.getElementById('menu');
+/* ================= MENU ================= */
+function renderMenu() {
+  const menuDiv = document.getElementById('menu');
+  menuDiv.innerHTML = '';
 
-menuData.forEach(item => {
-  const div = document.createElement('div');
-  div.className = 'menu-item';
-  div.innerHTML = `
-    <div>
-      <b>${item.name}</b><br>
-      <small>${item.price} đ</small>
-    </div>
-    <div class="controls">
-      <button onclick="add(${item.id})">+</button>
-      <button onclick="remove(${item.id})">-</button>
-    </div>
-  `;
-  menuDiv.appendChild(div);
-});
+  if (menuData.length === 0) {
+    menuDiv.innerHTML = '<i>Chưa có món nào</i>';
+    return;
+  }
+
+  menuData.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'menu-item';
+    div.innerHTML = `
+      <div>
+        <b>${item.name}</b><br>
+        <small>${item.price} đ</small>
+      </div>
+      <div class="controls">
+        <button onclick="add(${item.id})">+</button>
+        <button onclick="remove(${item.id})">-</button>
+      </div>
+    `;
+    menuDiv.appendChild(div);
+  });
+}
+
+function addNewItem() {
+  if (billLocked) return;
+
+  const name = document.getElementById('newName').value.trim();
+  const price = parseInt(document.getElementById('newPrice').value);
+
+  if (!name || !price) {
+    alert('Nhập tên và giá món');
+    return;
+  }
+
+  menuData.push({
+    id: Date.now(),
+    name,
+    price
+  });
+
+  document.getElementById('newName').value = '';
+  document.getElementById('newPrice').value = '';
+
+  renderMenu();
+}
 
 /* ================= CART ================= */
 function renderCart() {
@@ -133,17 +182,17 @@ function renderCart() {
   let total = 0;
 
   Object.keys(cart).forEach(id => {
-    const m = menuData.find(x => x.id == id);
+    const item = menuData.find(m => m.id == id);
     const qty = cart[id];
-    if (!m || qty <= 0) return;
+    if (!item || qty <= 0) return;
 
-    const lineTotal = m.price * qty;
+    const lineTotal = item.price * qty;
     total += lineTotal;
 
-    const line = document.createElement('div');
-    line.className = 'cart-line';
-    line.innerHTML = `<span>${m.name} x ${qty}</span><span>${lineTotal}</span>`;
-    cartDiv.appendChild(line);
+    const div = document.createElement('div');
+    div.className = 'cart-line';
+    div.innerHTML = `<span>${item.name} x ${qty}</span><span>${lineTotal}</span>`;
+    cartDiv.appendChild(div);
   });
 
   document.getElementById('total').innerText = total;
@@ -167,16 +216,17 @@ async function saveBill() {
   let total = 0;
 
   Object.keys(cart).forEach(id => {
-    const m = menuData.find(x => x.id == id);
+    const item = menuData.find(m => m.id == id);
     const qty = cart[id];
-    if (!m || qty <= 0) return;
+    if (!item || qty <= 0) return;
 
-    const price = m.price * qty;
+    const price = item.price * qty;
     total += price;
-    items.push({ name: m.name, qty, price });
+
+    items.push({ name: item.name, qty, price });
   });
 
-  await supabase.from('bills').insert({
+  await supabaseClient.from('bills').insert({
     bill_id: billId,
     items,
     total,
@@ -204,6 +254,10 @@ async function generateQR() {
     height: 180
   });
 }
+
+/* ================= INIT ================= */
+renderMenu();
+renderCart();
 </script>
 
 </body>
