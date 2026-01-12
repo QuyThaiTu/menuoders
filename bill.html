@@ -32,11 +32,11 @@
   <div class="bank">
     <h3>Thông tin thanh toán</h3>
     <div>Ngân hàng: <b>Vietcombank</b></div>
-    <div>Chủ tài khoản: <b>ĐANG VU DINH QUY</b></div>
-    <div>Số tài khoản: <b id="account">9766425977</b></div>
+    <div>Chủ tài khoản: <b>NGUYEN VAN A</b></div>
+    <div>Số tài khoản: <b id="account">0123456789</b></div>
 
     <div class="muted">Nội dung chuyển khoản:</div>
-    <div><b id="content"></b>QuyCN1</div>
+    <div><b id="content"></b></div>
 
     <img id="vietqr" style="width:220px;margin:10px auto;display:block" />
 
@@ -52,48 +52,41 @@ const billId = params.get('bill_id');
 document.getElementById('billId').innerText = billId || 'Không có mã đơn';
 document.getElementById('time').innerText = new Date().toLocaleString();
 
-// DEMO: dữ liệu giả (sau này lấy từ backend / localStorage)
-const demoBill = {
-  items: [
-    { name: 'Xôi gà', qty: 1, price: 25000 },
-    { name: 'Trà tắc', qty: 1, price: 15000 }
-  ],
-  total: 40000
-};
+// LẤY BILL TỪ localStorage THEO bill_id
+const stored = localStorage.getItem('bill_' + billId);
+let billData;
+
+if (stored) {
+  billData = JSON.parse(stored);
+} else {
+  billData = {
+    items: [],
+    total: 0
+  };
+}
 
 const tbody = document.getElementById('items');
-demoBill.items.forEach(i => {
+tbody.innerHTML = '';
+
+billData.items.forEach(i => {
   const tr = document.createElement('tr');
   tr.innerHTML = `<td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td>`;
   tbody.appendChild(tr);
 });
 
-document.getElementById('total').innerText = demoBill.total;
+document.getElementById('total').innerText = billData.total;
 
 // Nội dung chuyển khoản: MÃ ĐƠN + SỐ TIỀN
-const content = `${billId} ${demoBill.total}`;
-document.getElementById('content').innerText = content;
-
-// ===== VIETQR CHUẨN NAPAS =====
-function generateVietQR(billId, amount) {
-  const bankId = 'VCB';
-  const accountNo = '9766425977';
-  const accountName = 'DANG VU DINH QUY';
-  const addInfo = `${billId} ${amount}`;
-
-  return `https://api.vietqr.io/image/${bankId}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
-}
-
 // Nội dung chuyển khoản: MÃ ĐƠN + SỐ TIỀN
-const content = `${billId} ${demoBill.total}`;
+const content = `${billId} ${billData.total}`;
 document.getElementById('content').innerText = content;
 
 // Hiển thị VietQR
-const vietqrUrl = generateVietQR(billId, demoBill.total);
+const vietqrUrl = generateVietQR(billId, billData.total);
 document.getElementById('vietqr').src = vietqrUrl;
 
 // Link mở app ngân hàng (fallback)
-const payUrl = `https://vcbdigibank.vietcombank.com.vn/pay?account=0123456789&amount=${demoBill.total}&content=${encodeURIComponent(content)}`;
+const payUrl = `https://vcbdigibank.vietcombank.com.vn/pay?account=0123456789&amount=${billData.total}&content=${encodeURIComponent(content)}`;
 document.getElementById('payLink').href = payUrl;
 </script>
 
