@@ -80,7 +80,26 @@ function renderMenu() {
     menu.appendChild(div);
   });
 }
+function saveBillToLocalStorage() {
+  const items = Object.values(cart).map(i => ({
+    name: i.name,
+    qty: i.qty,
+    price: i.price
+  }));
 
+  const billData = {
+    items: items,
+    total: totalPrice,
+    createdAt: new Date().toISOString()
+  };
+
+  localStorage.setItem(
+    'bill_' + staticBillId,
+    JSON.stringify(billData)
+  );
+}
+
+  
 function addItem(id) {
   if (billLocked) {
     alert('Bill đã khoá, không thể thêm món');
@@ -123,7 +142,7 @@ function generateQR() {
   if (!staticBillId) {
     staticBillId = 'BILL-' + Date.now();
   }
-
+saveBillToLocalStorage();
   // Tạo link dẫn sang trang bill.html
   const basePath = window.location.href.replace(/[^/]*$/, '');
   const billUrl = basePath + 'bill.html?bill_id=' + staticBillId;
