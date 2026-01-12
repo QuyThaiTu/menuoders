@@ -2,53 +2,118 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Bill thanh toán</title>
+<title>Hóa đơn thanh toán</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-body { font-family: Arial; background:#f5f5f5; padding:20px }
-.bill { max-width:420px; margin:auto; background:#fff; padding:20px; border-radius:8px }
-table { width:100%; border-collapse:collapse; margin-top:10px }
-td,th { border-bottom:1px solid #ddd; padding:6px }
-.total { font-weight:bold; margin-top:10px }
+body {
+  font-family: Arial, sans-serif;
+  background:#f5f5f5;
+  padding:20px;
+}
+
+.bill {
+  max-width:420px;
+  margin:auto;
+  background:#fff;
+  padding:20px;
+  border-radius:8px;
+  box-shadow:0 2px 6px rgba(0,0,0,.1);
+}
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+
+td, th {
+  border-bottom:1px solid #ddd;
+  padding:6px;
+  text-align:left;
+}
+
+.total {
+  font-weight:bold;
+  margin-top:10px;
+}
+
+.status {
+  margin-top:5px;
+}
+
+.bank {
+  margin-top:15px;
+  padding:10px;
+  background:#f0f8ff;
+  border-radius:6px;
+}
+
+button {
+  margin-top:10px;
+  width:100%;
+  padding:8px;
+}
 </style>
 </head>
+
 <body>
 
 <div class="bill">
-<h2>HÓA ĐƠN</h2>
-<div>Mã đơn: <b id="billId"></b></div>
-<div>Thời gian: <span id="time"></span></div>
+  <h2>HÓA ĐƠN THANH TOÁN</h2>
 
-<table>
-<thead><tr><th>Món</th><th>SL</th><th>Giá</th></tr></thead>
-<tbody id="items"></tbody>
-</table>
+  <div>Mã đơn: <b id="billId"></b></div>
+  <div>Thời gian: <span id="time"></span></div>
+  <div class="status">Trạng thái: <b id="status">...</b></div>
 
-<div class="total">Tổng tiền: <span id="total"></span> đ</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Món</th>
+        <th>SL</th>
+        <th>Giá</th>
+      </tr>
+    </thead>
+    <tbody id="items"></tbody>
+  </table>
 
-<h3>VietQR</h3>
-<img id="vietqr" width="250">
+  <div class="total">
+    Tổng tiền: <span id="total">0</span> đ
+  </div>
+
+  <div class="bank">
+    <h3>Thông tin chuyển khoản</h3>
+    <div>Ngân hàng: <b>Vietcombank</b></div>
+    <div>Chủ TK: <b>DANG VU DINH QUY</b></div>
+    <div>Số TK: <b>9766425977</b></div>
+    <div>Nội dung CK: BILL Demo CN1</div>
+    <div><b id="content"></b></div>
+    <img id="vietqr" width="250" style="margin-top:10px">
+  </div>
+
+  <button id="paidBtn" onclick="markAsPaid()">✅ Đã thanh toán</button>
 </div>
 
 <script>
 /* ================= SUPABASE ================= */
-const supabase = supabase.createClient(
-  'https://xopuxyouxjkiumigcntl.supabase.co',
-  'sb_publishable_amT6e0zWSDYtglUIKGZhOw_I7Mqpa4O'
+const supabaseClient = supabase.createClient(
+  'https://xopuxyouxjkiumigcntl.supabase.co',        // <-- THAY
+  'sb_publishable_amT6e0zWSDYtglUIKGZhOw_I7Mqpa4O'    // <-- THAY
 );
 
 /* ================= PARAM ================= */
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(window.location.search);
 const billId = params.get('bill_id');
 
-document.getElementById('billId').innerText = billId;
+document.getElementById('billId').innerText = billId || 'Không có mã';
 document.getElementById('time').innerText = new Date().toLocaleString();
 
 /* ================= VIETQR ================= */
 function generateVietQR(billId, amount) {
   const bank = 'VCB';
-  const acc = '0123456789';
-  const name = 'NGUYEN VAN A';
+  const acc = '9766425977';
+  const name = 'DANG VU DINH QUY';
   const info = `${billId} ${amount}`;
 
   return `https://api.vietqr.io/image/${bank}-${acc}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(info)}&accountName=${encodeURIComponent(name)}`;
@@ -56,23 +121,68 @@ function generateVietQR(billId, amount) {
 
 /* ================= LOAD BILL ================= */
 (async () => {
-  const { data } = await supabase
+  console.log('Loading bill:', billId);
+
+  const { data, error } = await supabaseClient
     .from('bills')
     .select('*')
     .eq('bill_id', billId)
     .single();
 
+  console.log('Bill data:', data);
+  console.log('Bill error:', error);
+
+  if (error || !data) {
+    document.body.innerHTML = '<h3>❌ Không tìm thấy hóa đơn</h3>';
+    return;
+  }
+
+  // Status
+  document.getElementById('status').innerText = data.status;
+
+  if (data.status === 'PAID') {
+    document.getElementById('paidBtn').style.display = 'none';
+  }
+
+  // Items
   const tbody = document.getElementById('items');
+  tbody.innerHTML = '';
+
   data.items.forEach(i => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${i.name}</td><td>${i.qty}</td><td>${i.price}</td>`;
     tbody.appendChild(tr);
   });
 
+  // Total
   document.getElementById('total').innerText = data.total;
+
+  // Payment info
+  const content = `${billId} ${data.total}`;
+  document.getElementById('content').innerText = content;
   document.getElementById('vietqr').src =
     generateVietQR(billId, data.total);
 })();
+
+/* ================= MARK PAID ================= */
+async function markAsPaid() {
+  if (!confirm('Xác nhận đơn đã thanh toán?')) return;
+
+  const { error } = await supabaseClient
+    .from('bills')
+    .update({ status: 'PAID' })
+    .eq('bill_id', billId);
+
+  if (error) {
+    alert('Lỗi cập nhật trạng thái');
+    console.error(error);
+    return;
+  }
+
+  document.getElementById('status').innerText = 'PAID';
+  document.getElementById('paidBtn').style.display = 'none';
+  alert('Đã xác nhận thanh toán');
+}
 </script>
 
 </body>
