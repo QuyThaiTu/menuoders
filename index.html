@@ -66,4 +66,145 @@ body {
 
 <body>
 
-<h2>
+<h2>🍽️ MENU ĐẶT MÓN</h2>
+
+<div class="wrapper" id="app">
+
+  <!-- MENU -->
+  <div class="panel">
+    <h3>Danh sách món</h3>
+    <div id="menu"></div>
+  </div>
+
+  <!-- GIỎ + QR -->
+  <div class="panel">
+    <h3>Giỏ hàng</h3>
+    <div id="cart"></div>
+    <div class="total">Tổng: <span id="total">0</span> đ</div>
+
+    <hr>
+    <button onclick="generateQR()">Tạo QR thanh toán</button>
+    <div id="qrcode" style="margin-top:10px"></div>
+  </div>
+
+</div>
+
+<script>
+/* ================= SUPABASE ================= */
+const supabase = supabase.createClient(
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY'
+);
+
+/* ================= DATA ================= */
+const menuData = [
+  { id: 1, name: 'Xôi gà', price: 25000 },
+  { id: 2, name: 'Xôi xá xíu', price: 30000 },
+  { id: 3, name: 'Trà tắc', price: 15000 }
+];
+
+let cart = {};
+let billLocked = false;
+let billId = null;
+
+/* ================= RENDER MENU ================= */
+const menuDiv = document.getElementById('menu');
+
+menuData.forEach(item => {
+  const div = document.createElement('div');
+  div.className = 'menu-item';
+  div.innerHTML = `
+    <div>
+      <b>${item.name}</b><br>
+      <small>${item.price} đ</small>
+    </div>
+    <div class="controls">
+      <button onclick="add(${item.id})">+</button>
+      <button onclick="remove(${item.id})">-</button>
+    </div>
+  `;
+  menuDiv.appendChild(div);
+});
+
+/* ================= CART ================= */
+function renderCart() {
+  const cartDiv = document.getElementById('cart');
+  cartDiv.innerHTML = '';
+  let total = 0;
+
+  Object.keys(cart).forEach(id => {
+    const m = menuData.find(x => x.id == id);
+    const qty = cart[id];
+    if (!m || qty <= 0) return;
+
+    const lineTotal = m.price * qty;
+    total += lineTotal;
+
+    const line = document.createElement('div');
+    line.className = 'cart-line';
+    line.innerHTML = `<span>${m.name} x ${qty}</span><span>${lineTotal}</span>`;
+    cartDiv.appendChild(line);
+  });
+
+  document.getElementById('total').innerText = total;
+}
+
+function add(id) {
+  if (billLocked) return;
+  cart[id] = (cart[id] || 0) + 1;
+  renderCart();
+}
+
+function remove(id) {
+  if (billLocked || !cart[id]) return;
+  cart[id]--;
+  renderCart();
+}
+
+/* ================= SAVE BILL ================= */
+async function saveBill() {
+  const items = [];
+  let total = 0;
+
+  Object.keys(cart).forEach(id => {
+    const m = menuData.find(x => x.id == id);
+    const qty = cart[id];
+    if (!m || qty <= 0) return;
+
+    const price = m.price * qty;
+    total += price;
+    items.push({ name: m.name, qty, price });
+  });
+
+  await supabase.from('bills').insert({
+    bill_id: billId,
+    items,
+    total,
+    status: 'UNPAID'
+  });
+}
+
+/* ================= QR ================= */
+async function generateQR() {
+  if (billLocked) return;
+
+  billLocked = true;
+  document.getElementById('app').classList.add('locked');
+
+  billId = 'BILL-' + Date.now();
+  await saveBill();
+
+  const base = location.href.replace(/[^/]*$/, '');
+  const url = base + 'bill.html?bill_id=' + billId;
+
+  document.getElementById('qrcode').innerHTML = '';
+  new QRCode(document.getElementById('qrcode'), {
+    text: url,
+    width: 180,
+    height: 180
+  });
+}
+</script>
+
+</body>
+</html>
