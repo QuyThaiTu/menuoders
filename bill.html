@@ -32,8 +32,8 @@
   <div class="bank">
     <h3>Thông tin thanh toán</h3>
     <div>Ngân hàng: <b>Vietcombank</b></div>
-    <div>Chủ tài khoản: <b>NGUYEN VAN A</b></div>
-    <div>Số tài khoản: <b id="account">0123456789</b></div>
+    <div>Chủ tài khoản: <b>DANG VU DINH QUY</b></div>
+    <div>Số tài khoản: <b id="account">9766425977</b></div>
 
     <div class="muted">Nội dung chuyển khoản:</div>
     <div><b id="content"></b></div>
@@ -45,6 +45,16 @@
 </div>
 
 <script>
+  // ===== HÀM TẠO VIETQR CHUẨN NAPAS =====
+function generateVietQR(billId, amount) {
+  const bankId = 'VCB';              // Mã ngân hàng (VCB, ACB, BIDV, TCB...)
+  const accountNo = '0123456789';    // Số tài khoản
+  const accountName = 'NGUYEN VAN A';
+  const addInfo = `${billId} ${amount}`;
+
+  return `https://api.vietqr.io/image/${bankId}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
+}
+
 // Lấy bill_id từ URL
 const params = new URLSearchParams(window.location.search);
 const billId = params.get('bill_id');
