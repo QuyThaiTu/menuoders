@@ -81,15 +81,27 @@ function renderMenu() {
   });
 }
 function saveBillToLocalStorage() {
-  const items = Object.values(cart).map(i => ({
-    name: i.name,
-    qty: i.qty,
-    price: i.price
-  }));
+  const items = [];
+  let total = 0;
+
+  Object.keys(cart).forEach(id => {
+    const item = menuData.find(m => m.id == id);
+    if (!item) return;
+
+    const qty = cart[id];
+    const price = item.price * qty;
+    total += price;
+
+    items.push({
+      name: item.name,
+      qty: qty,
+      price: price
+    });
+  });
 
   const billData = {
     items: items,
-    total: totalPrice,
+    total: total,
     createdAt: new Date().toISOString()
   };
 
@@ -98,6 +110,7 @@ function saveBillToLocalStorage() {
     JSON.stringify(billData)
   );
 }
+
 
   
 function addItem(id) {
